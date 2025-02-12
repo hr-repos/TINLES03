@@ -1,0 +1,115 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{geometry}
+\geometry{top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm}
+\usepackage{hyperref}
+\usepackage{bookmark}
+\usepackage{longtable}
+
+\setlength{\parskip}{1em}
+
+\title{Tank Project: Functional and Technical Requirements}
+\author{Tigo Goes}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\newpage
+
+\section*{Introduction}
+
+The Tank Project is an innovative robotic system designed to autonomously map a room or area while simultaneously interacting with users through a web interface. The central objective of the project is to enable the tank to explore and map an environment in real-time, while providing visual feedback to the user via an interactive interface. The mapping capability is achieved through the integration of a variety of sensors, such as Lidar, ultrasonic sensors, and IMU, which allow the tank to detect its surroundings, build a map of the area, and autonomously navigate obstacles.
+
+In addition to mapping, the tank will be capable of performing actions such as shooting targets at close range, and users will have the ability to control the robot via the web interface. The tank will automatically generate a 2D map of the room, continuously updating as it explores and moves around. The map will be accessible to the user on the web interface, providing real-time data on the tank's position, surrounding obstacles, and other relevant sensor information.
+
+To achieve this, the tank must be equipped with autonomous navigation capabilities, utilizing sensor fusion techniques for accurate location tracking and mapping. The system will employ algorithms for path planning, obstacle avoidance, and efficient exploration. By autonomously navigating the environment and generating a detailed map, the tank will help users understand the layout of the area, detect obstacles, and make intelligent decisions based on the data collected.
+
+This document outlines the functional and technical requirements of the project, focusing on the mapping system as the key feature. It provides details on the necessary hardware, software, and communication protocols that will ensure the success of the autonomous mapping and navigation system. The requirements in this document also address additional features such as remote control, real-time status updates, and user interaction, which complement the mapping capabilities of the tank.
+
+\section*{Main Features of the System}
+
+\subsection*{1. Control of the Tank via Web Interface}
+\begin{itemize}
+    \item \textbf{Sending coordinates to the tank}: Users can set goals by entering specific coordinates (e.g., x, y in the room) through a web interface.
+    \item \textbf{Tank moves to coordinates}: The tank must autonomously navigate to the specified location using an autonomous route planning and navigation algorithm.
+    \item \textbf{Manual Control}: The user can manually control the tank via buttons or a joystick interface on the website.
+\end{itemize}
+
+\subsection*{2. Feedback and Feedback to the Website}
+\begin{itemize}
+    \item \textbf{Tank location and status}: The website should regularly receive and display the current location of the tank based on sensor data, such as Lidar, IMU, and motor odometry.
+    \item \textbf{Map visualization}: The website displays a 2D map of the room, which adapts in real-time based on the tank's data.
+    \item \textbf{Obstacle detection}: Users can see obstacles detected by the tank using sensors (e.g., Lidar or ultrasonic), helping them understand where the tank cannot go.
+    \item \textbf{Battery level and system status}: The website shows the tank’s current battery status and other critical system information.
+\end{itemize}
+
+\subsection*{3. Shooting Mechanism}
+\begin{itemize}
+    \item \textbf{Shooting via the web interface}: The user can activate the tank to shoot via the web interface.
+    \item \textbf{Shooting at a target 30 cm away}: The tank must be able to automatically shoot when a target is within \textbf{30 cm}, measured by a \textbf{distance sensor} (e.g., ultrasonic sensor or Lidar).
+    \item \textbf{Shooting status feedback}: The status of the shooting mechanism should be sent back to the user (e.g., a notification when the tank has shot or an error message if it fails).
+\end{itemize}
+
+\subsection*{4. Display on the Tank}
+\begin{itemize}
+    \item \textbf{Displaying sensor data}: The tank must have a \textbf{display} (e.g., OLED/LCD) that shows current sensor information, such as battery status, distance to obstacles, and the tank’s current location.
+    \item \textbf{Status information}: The display should also show information such as control mode (autonomous or manual), error messages, and the current tank status.
+\end{itemize}
+
+\subsection*{5. Interaction and User Interface}
+\begin{itemize}
+    \item \textbf{Intuitive web interface}: The web interface must be easily accessible via a browser and should include buttons for sending coordinates, manual control, shooting, and viewing tank status.
+    \item \textbf{Real-time updates}: The interface must provide real-time information without requiring the user to manually refresh the page.
+    \item \textbf{Responsive layout}: The web interface must work well on both desktop and mobile devices.
+\end{itemize}
+
+\section*{Technical Requirements}
+
+\subsection*{1. Communication between the Web Interface and the Tank}
+\begin{itemize}
+    \item \textbf{Bidirectional communication}: The web interface must be able to send coordinates to the tank and receive status information from the tank at the same time.
+    \item \textbf{Reliable and fast data transfer}: For real-time data, the communication between the ESP32 and the web interface must be fast and reliable.
+    \item \textbf{Network connection}: The ESP32 must be connected to a network (WiFi or local network) to communicate with the web interface.
+\end{itemize}
+
+\subsection*{2. Tank Location Determination}
+\begin{itemize}
+    \item \textbf{Use of sensors}: Position and orientation must be determined by sensors such as Lidar, IMU, and motor encoders.
+    \item \textbf{Autonomous navigation}: The tank must be able to autonomously reach coordinates using a suitable navigation technique.
+    \item \textbf{Obstacle warning system}: The tank must be able to detect obstacles and react accordingly.
+\end{itemize}
+
+\subsection*{3. Security and Error Management}
+\begin{itemize}
+    \item \textbf{Error detection}: The system must be able to detect errors and provide feedback to the user.
+    \item \textbf{Communication security}: The communication between the web interface and the tank must be secure.
+\end{itemize}
+
+\subsection*{4. Use of Omni-Wheels}
+\begin{itemize}
+    \item \textbf{Omni-wheels for versatile movement}: The tank uses omni-wheels, allowing it to move in multiple directions without changing its orientation.
+    \item \textbf{Precise control}: The omni-wheels enable the tank to \text{turn precisely} and make \textbf{sharp turns} without the need for a traditional wheel rotation.
+    \item \textbf{PID control}: To achieve precise movement, the tank should use a PID controller to manage the speed and direction of the motors.
+\end{itemize}
+
+\section*{Additional Requirements}
+\begin{itemize}
+    \item \textbf{System stability}: The system must be robust and fault-tolerant. There should be a watchdog timer to ensure the tank restarts if the system crashes.
+    \item \textbf{Scalability}: The system must be scalable for future features.
+    \item \textbf{Energy management}: The tank must efficiently use energy, for example, by entering sleep mode when not in use.
+\end{itemize}
+
+\section*{Changelog}
+
+\begin{longtable}{|c|c|l|}
+    \hline
+    \textbf{Version} & \textbf{Date} & \textbf{Description} \\
+    \hline
+    1.0 & 11 February, 2025 & Initial version created. \\
+    \hline
+\end{longtable}
+
+\end{document}
