@@ -1,0 +1,45 @@
+trigger:
+  branches:
+    include:
+      - main  # Run pipeline on changes to main
+      - feature/*  # Run on feature branches
+
+pool:
+  vmImage: 'ubuntu-latest'  # Use a Linux VM for building
+
+steps:
+  - script: |
+      sudo apt update
+      sudo apt install -y python3 python3-pip git
+    displayName: "Install Dependencies"
+
+  - script: |
+      git clone --recursive https://github.com/espressif/esp-idf.git ~/esp-idf
+      cd ~/esp-idf
+      ./install.sh
+    displayName: "Setup ESP-IDF"
+
+  - script: |
+      source ~/esp-idf/export.sh
+      idf.py --version
+    displayName: "Verify ESP-IDF"
+
+  - script: |
+      source ~/esp-idf/export.sh
+      cd your-esp32-project
+      idf.py build
+    displayName: "Build ESP32 Project"
+
+  - script: |
+      source ~/esp-idf/export.sh
+      cd your-esp32-project
+      idf.py flash --port /dev/ttyUSB0
+    displayName: "Flash to ESP32 (if connected)"
+    condition: and(succeeded(), eq(variables['Build.Reason'], 'Manual')) # Only flash if manually triggered
+
+  - script: |
+      source ~/esp-idf/export.sh
+      cd your-esp32-project
+      idf.py monitor
+    displayName: "Monitor ESP32 Serial Output"
+    condition: and(succeeded(), eq(variables['Build.Reason'], 'Manual')) # Only monitor if manually triggered
