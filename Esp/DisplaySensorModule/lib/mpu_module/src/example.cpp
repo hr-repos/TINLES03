@@ -1,19 +1,12 @@
 #include <Arduino.h>
 #include "mpu_module.h"
-#include "lcd_module.h"
 
 long timer = 0;
-
 MpuModule mpuModule;
-LcdModule lcdModule;
 
 void setup() {
     Wire.begin();
     Serial.begin(115600);
-
-    lcdModule.initialize();
-    lcdModule.setTextFirstLine("Test");
-    lcdModule.setTextSecondLine("Explorer bot");
 }
 
 void loop() {
