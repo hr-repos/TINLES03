@@ -11,15 +11,16 @@ public:
     void update();
     void printData();
 
+    // Public variables for MQTT access
+    float rawNorth, rawEast, rawSouth, rawWest;
+    float recalculatedNorth, recalculatedEast, recalculatedSouth, recalculatedWest;
+
 private:
     UltrasonicSensor &northSensor;
     UltrasonicSensor &eastSensor;
     UltrasonicSensor &southSensor;
     UltrasonicSensor &westSensor;
     CompassModule &compass;
-
-    float rawNorth, rawEast, rawSouth, rawWest;
-    float recalculatedNorth, recalculatedEast, recalculatedSouth, recalculatedWest;
 
     void recalculateData(float yaw);
 };

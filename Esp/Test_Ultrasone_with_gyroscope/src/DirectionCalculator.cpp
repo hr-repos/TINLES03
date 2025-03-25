@@ -39,6 +39,7 @@ void DirectionCalculator::recalculateData(float yaw) {
         recalculatedSouth = rawWest + 0.01;
         recalculatedWest = rawNorth + 0.01;
     }
+    printData();
 }
 
 void DirectionCalculator::printData() {
