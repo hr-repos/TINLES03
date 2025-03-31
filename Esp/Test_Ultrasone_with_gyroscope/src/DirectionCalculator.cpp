@@ -1,8 +1,11 @@
 #include <Arduino.h>
 #include "DirectionCalculator.h"
 
-DirectionCalculator::DirectionCalculator(UltrasonicSensor &north, UltrasonicSensor &east, UltrasonicSensor &south, UltrasonicSensor &west, CompassModule &compass)
-    : northSensor(north), eastSensor(east), southSensor(south), westSensor(west), compass(compass) {}
+DirectionCalculator::DirectionCalculator(UltrasonicSensor &north, UltrasonicSensor &east, 
+                                       UltrasonicSensor &south, UltrasonicSensor &west,
+                                       GY271_QMC5883L &compass)
+    : northSensor(north), eastSensor(east), southSensor(south), westSensor(west),
+      compass(compass) {}
 
 void DirectionCalculator::update() {
     rawNorth = northSensor.getDistance();
@@ -10,8 +13,8 @@ void DirectionCalculator::update() {
     rawSouth = southSensor.getDistance();
     rawWest = westSensor.getDistance();
 
-    float yaw = compass.getYaw();
-    recalculateData(yaw);
+    currentYaw = compass.getHeadingDegrees();  // Get current yaw from compass
+    recalculateData(currentYaw);
 }
 
 void DirectionCalculator::recalculateData(float yaw) {
@@ -43,14 +46,12 @@ void DirectionCalculator::recalculateData(float yaw) {
 }
 
 void DirectionCalculator::printData() {
-    float yaw = compass.getYaw();
-
     Serial.println("Raw Data:");
     Serial.printf("North: %.2f cm, East: %.2f cm, South: %.2f cm, West: %.2f cm\n",
                   rawNorth, rawEast, rawSouth, rawWest);
 
     Serial.println("Recalculated Data:");
-    Serial.printf("Yaw: %.2f degrees\n", yaw); // Print the yaw angle
+    Serial.printf("Yaw: %.2f degrees\n", currentYaw); // Print the actual yaw angle
     Serial.printf("North: %.2f cm, East: %.2f cm, South: %.2f cm, West: %.2f cm\n",
                   recalculatedNorth, recalculatedEast, recalculatedSouth, recalculatedWest);
 

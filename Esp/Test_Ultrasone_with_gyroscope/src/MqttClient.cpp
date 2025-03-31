@@ -15,6 +15,8 @@ void MqttClient::begin() {
 
 void MqttClient::connectWiFi() {
     Serial.print("Connecting to WiFi...");
+    Serial.printf("Connecting to WiFi... SSID: %s, Password: %s\n", _ssid, _password);
+
     WiFi.begin(_ssid, _password);
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
