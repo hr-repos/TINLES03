@@ -1,0 +1,38 @@
+
+\section{Testing Procedures}
+
+\subsection{Driving of the bot}
+The robot was tested in a controlled indoor environment on a flat, smooth surface. The following experiments were conducted:
+
+\begin{enumerate}
+    \item \textbf{Time per Rotation Test}: The rotation time of each motor was recorded, conducting 
+        \textbf{five} and \textbf{ten} consecutive rotation trials per motor to analyze consistency and speed. 
+        This is to make sure that the rotation speed is the same across all motors
+    \item \textbf{Linear Motion Test}: The robot was commanded to move forward, backward, left, and right, to 
+        assess its ability to maintain straight-line movement.
+    \item \textbf{Diagonal Motion Test}: The capability of moving diagonally without requiring additional turning was evaluated.
+    \item \textbf{Rotational Motion Test}: The robot performed 360-degree in-place rotations to measure its turning efficiency.
+    \item \textbf{Complex Maneuverability Test}: The robot followed a predefined movement path incorporating sharp turns and 
+        continuous directional changes to assess real-world usability.
+\end{enumerate}
+
+\subsection{sensors} 
+\textbf{Precision of the ultrasonic sensors}:
+The ultrasonic sensors, used to detect obstacles, were tested by placing obstacles at various distances and 
+measuring the distance reported by the sensors. The sensors were able to detect obstacles
+with a deviation of 2\%.
+
+
+\textbf{Limitations of the gyroscopic sensor}:
+The gyroscopic sensor is limited to measurements on the x/y-axis and is not able to measure the heading/yaw.
+Because of the lack of heading and yaw measurements, the gyro is not suitable for our purpose.
+
+
+\textbf{Performance of the magnetometer sensor}:
+The magnetometer sensor was tested by rotating the robot in a circle and measuring the heading.
+The sensor was able to detect the heading with a deviation of 2\%. The sensor was able to detect the heading with a deviation of 2\%.
+
+\textbf{Coordinate transformation}:
+The calculation was performed using trigonometry. Initially, the rotation was inverted due to the calculations, but after making the necessary adjustments, this issue was successfully resolved.
+To verify the accuracy, the rotation angle was taken and recalculated using the obtained values. The results matched, confirming the correctness of the approach.
+By utilizing the heading and the correct sensor values, recalculating the rotation is therefore possible and reliable.

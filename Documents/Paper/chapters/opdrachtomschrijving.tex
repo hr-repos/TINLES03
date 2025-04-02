@@ -1,0 +1,25 @@
+% probleemstelling
+% requirements
+% kwaliteitseisen
+% risicoanalyse
+
+\section{Opdrachtomschrijving}
+% Nitin 
+\textbf{MQTT Broker:} The system utilizes the Mosquitto broker for local testing and EMQX for scalability. 
+Mosquitto is installed via the `sudo apt-get install mosquitto` command and is used to facilitate communication 
+between the bot and the dashboard with low-latency message exchanges. For production-level scalability, EMQX 
+ensures the broker can handle a larger number of devices and concurrent users. 
+
+% \begin{flushright} % Align the following content to the right side
+\textbf{Frontend Dashboard:} The dashboard is built using React.js, with dynamic data visualization provided by Grafana. 
+The dashboard subscribes to MQTT topics through MQTT.js, allowing for real-time updates on bot status, including metrics 
+like speed, battery, and system diagnostics. The user interface includes interactive controls for bot movement and emergency 
+stop functionalities. Additionally, system diagnostics and event logging are provided to help users track the bot's behavior 
+and troubleshoot any issues that arise.
+
+\subsection{Problem definition}
+
+\subsection{Requirements}
+
+\subsection{Quality risk analysis}
+

@@ -1,0 +1,54 @@
+
+\documentclass[conference]{IEEEtran}
+\usepackage{graphicx}
+\usepackage{multicol}
+\usepackage{geometry}
+\geometry{top=1in, bottom=1in, left=1in, right=1in}
+
+\begin{document}
+
+\title{Dashboard Communication Through MQTT}
+\author{Nitin Lala, Tigo Goes, Toine Steehouwer and Thomas van Vliet}
+\maketitle
+\begin{abstract}
+This paper discusses the development of an omniwheel bot that can drive autonomously or manually using a MQTT-based 
+dashboard for real-time communication and control, and is able to map its enviroment on a map while doing so. 
+The system was designed with IoT applications in mind, offering dynamic data updates, low-latency interactions, and 
+secure connections. We address challenges such as system scalability, reliability in data transmission, and the efficient 
+visualization of real-time information. The results demonstrate the ability of this system to manage and visualize data, with 
+the flexibility for future enhancements and improvements in its architecture.
+\end{abstract}
+
+
+
+
+\begin{IEEEkeywords}
+omniwheels, environment mapping, dashboard, MQTT, communication, control, IoT, real-time, security
+\end{IEEEkeywords}
+
+
+
+\input{chapters/introduction}
+
+\section{Preliminary investigation}
+
+\section{research questions}
+Main question: 
+How can visual mapping be implemnted on an omniwheel driven robot to map an environment?
+Subquestions:
+\begin{itemize}
+    \item How can the real-time sensor values of the ultrasonic sensors be used to map the environment? 
+    \item How can the map the location data be displayed remotely to the user in a clear way?
+
+\end{itemize}
+
+\input{chapters/opdrachtomschrijving}
+
+\input{chapters/method}
+\input{chapters/results}
+\input{chapters/conclusion}
+
+% \bibliographystyle{IEEEtran}
+% \bibliography{literature}
+\end{document}
+
