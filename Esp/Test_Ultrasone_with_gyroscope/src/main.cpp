@@ -118,6 +118,6 @@ void publishData(void *pvParameters) {
         );
         mqttClient.publishMessage("sensors/recalculated", recalculatedData);
 
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

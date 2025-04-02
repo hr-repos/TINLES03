@@ -3,3 +3,12 @@
 *.fls
 *.log
 *.synctex.gz
+.pio
+.vscode
+secrets.h
+.dart_tool
+.gradle
+.idea
+.flutter-plugins
+.flutter-plugins-dependencies
+extensions.json
