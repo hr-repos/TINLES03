@@ -1,8 +1,7 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_joystick/flutter_joystick.dart';
-// import 'package:camera/camera.dart';
-import 'dart:math';
 import 'package:mqtt_client/mqtt_browser_client.dart'; // For Web
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart'; // For mobile
@@ -10,16 +9,11 @@ import 'package:flutter/foundation.dart'; // To check for platform
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // final cameras = await availableCameras();
-  // final firstCamera = cameras[2];
-  runApp(MyApp(
-      // camera: firstCamera,
-      ));
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
-  // final CameraDescription camera;
-  MyApp();
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   _MyAppState createState() => _MyAppState();
@@ -27,143 +21,80 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool showMap = true;
-  bool isCameraPage = false;
   double joystickX = 0.0;
   double joystickY = 0.0;
-  // CameraController? _cameraController;
-  // Future<void>? _initializeControllerFuture;
 
-  double north = 1083.09;
-  double east = 686.97;
-  double south = 77.24;
-  double west = 41.87;
-  double x = 12.3;
-  double y = 8.6;
-  double z = 14.2;
-
-  late dynamic client;
+  late MqttClient client; // Changed to the base class
+  late RobotMapper mapper;
 
   @override
   void initState() {
     super.initState();
-    // _cameraController =
-    //     CameraController(widget.camera, ResolutionPreset.medium);
-    // _initializeControllerFuture =
-    //     _cameraController!.initialize().catchError((e) {
-    //   print("Camera initialization error: $e");
-    // });
-
+    mapper = RobotMapper();
     _connectMQTT();
   }
 
-  @override
-  void dispose() {
-    // _cameraController?.dispose();
-    if (client != null) {
-      client.disconnect();
-    }
-    super.dispose();
-  }
-
-  // Connect to MQTT with fallback
   Future<void> _connectMQTT() async {
+    const clientId = 'flutter_client';
     final wsUrl = 'ws://192.168.11.70';
     final tcpUrl = '192.168.11.70';
 
     if (kIsWeb) {
-      client = MqttBrowserClient.withPort(wsUrl, 'flutter_client', 9001);
+      client = MqttBrowserClient.withPort(wsUrl, clientId, 9001);
     } else {
-      client = MqttServerClient(tcpUrl, 'flutter_client');
+      client = MqttServerClient(tcpUrl, clientId);
     }
-
     client.logging(on: true);
+
     client.onConnected = _onConnected;
     client.onDisconnected = _onDisconnected;
-    client.onSubscribed = _onSubscribed;
-    client.pongCallback = _pong;
 
     final connMessage = MqttConnectMessage()
-        .withClientIdentifier('flutter_client')
-        .startClean();
+        .withClientIdentifier(clientId)
+        .startClean()
+        .withWillQos(MqttQos.atLeastOnce);
+
     client.connectionMessage = connMessage;
 
     try {
       await client.connect();
     } catch (e) {
       print("MQTT connection to port 9001 failed: $e");
-      // Fallback attempt on port 1883
-      if (kIsWeb) {
-        print("Web platform: skipping TCP fallback");
-      } else {
-        print("Trying fallback on port 1883...");
-        client = MqttServerClient(tcpUrl, 'flutter_client');
-        client.logging(on: true);
-        client.onConnected = _onConnected;
-        client.onDisconnected = _onDisconnected;
-        client.onSubscribed = _onSubscribed;
-        client.pongCallback = _pong;
-        client.port = 1883;
-        client.connectionMessage = connMessage;
-        try {
-          await client.connect();
-        } catch (e) {
-          print("MQTT fallback connection failed: $e");
-        }
-      }
     }
   }
 
   void _onConnected() {
-    print('Connected to MQTT broker');
     client.subscribe('sensors/recalculated', MqttQos.atMostOnce);
+    client.subscribe('robot/position', MqttQos.atMostOnce);
+    client.updates!.listen((List<MqttReceivedMessage<MqttMessage>> messages) {
+      for (var message in messages) {
+        final payload = message.payload as MqttPublishMessage;
+        final jsonString =
+            MqttPublishPayload.bytesToStringAsString(payload.payload.message);
+
+        try {
+          final jsonData = jsonDecode(jsonString);
+          if (message.topic == 'sensors/recalculated') {
+            mapper.processSensorData(jsonData);
+          } else if (message.topic == 'robot/position') {
+            final x = jsonData['x']?.toDouble() ?? 0.0;
+            final y = jsonData['y']?.toDouble() ?? 0.0;
+            mapper.updatePosition(x, y);
+          }
+          setState(() {});
+        } catch (e) {
+          print("Error processing message: $e");
+        }
+      }
+    });
   }
 
   void _onDisconnected() {
     print('Disconnected from MQTT broker');
   }
 
-  void _onSubscribed(String topic) {
-    print('Subscribed to $topic');
-  }
-
-  void _pong() {
-    print('Ping response received');
-  }
-
-  void _updateSensorValues(Map<String, dynamic> jsonData) {
-    setState(() {
-      north = jsonData['n'] ?? north;
-      east = jsonData['e'] ?? east;
-      south = jsonData['s'] ?? south;
-      west = jsonData['w'] ?? west;
-    });
-  }
-
-  void _onMessageReceived(MqttMessage message) {
-    try {
-      final payload = message as MqttPublishMessage;
-      final jsonString =
-          MqttPublishPayload.bytesToStringAsString(payload.payload.message);
-      print("Received payload: $jsonString");
-      final jsonData = json.decode(jsonString);
-      if (jsonData is Map<String, dynamic>) {
-        _updateSensorValues(jsonData);
-      } else {
-        print("Invalid JSON structure: $jsonData");
-      }
-    } catch (e) {
-      print("Error processing message: $e");
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    client.updates!.listen((List<MqttReceivedMessage<MqttMessage>>? messages) {
-      for (var message in messages!) {
-        _onMessageReceived(message.payload);
-      }
-    });
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
@@ -176,110 +107,64 @@ class _MyAppState extends State<MyApp> {
   }
 
   Widget _buildDashboard() {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
+    final screenSize = MediaQuery.of(context).size;
 
     return Container(
-      width: screenWidth,
-      height: screenHeight,
-      decoration: BoxDecoration(
-        color: Colors.black,
-        border: Border.all(color: Colors.white),
-        borderRadius: BorderRadius.circular(10),
-      ),
+      width: screenSize.width,
+      height: screenSize.height,
       child: Stack(
         children: [
+          // Map Container
           Container(
-            width: screenWidth * 0.85,
-            height: screenHeight * 0.7,
-            margin: EdgeInsets.only(top: 20),
-            decoration: BoxDecoration(
+            width: screenSize.width * 0.85,
+            height: screenSize.height * 0.7,
+            margin: const EdgeInsets.only(top: 20),
+            decoration: const BoxDecoration(
               border: Border(
-                top: BorderSide(color: Colors.white, width: 2),
-                left: BorderSide(color: Colors.white, width: 2),
-                right: BorderSide(color: Colors.white, width: 2),
-                bottom: BorderSide(color: Colors.white, width: 6),
+                top: BorderSide(color: Colors.white),
+                left: BorderSide(color: Colors.white),
+                right: BorderSide(color: Colors.white),
               ),
-              borderRadius: BorderRadius.circular(12),
             ),
-            child: Center(
-              child: Text('MAP',
-                  style: TextStyle(color: Colors.white, fontSize: 28)),
-            ),
+            child: showMap ? _buildMapWidget() : _buildCameraPlaceholder(),
           ),
+
           Positioned(
-            bottom: -10,
-            left: screenWidth * 0.45,
+            bottom: 20,
+            left: screenSize.width * 0.45,
             child: Joystick(
               listener: (details) {
-                setState(() {
-                  joystickX = details.x;
-                  joystickY = details.y;
-                });
-                print("Joystick X: $joystickX, Y: $joystickY");
+                mapper.moveRobot(details.x * 5, details.y * 5);
+                setState(() {});
               },
             ),
           ),
-          Positioned(
-            bottom: 65,
-            left: screenWidth * 0.35,
-            child: GestureDetector(
-              onTap: () {
-                print('Left triangle pressed');
-              },
-              child: CustomPaint(
-                size: Size(50, 50),
-                painter: TrianglePainter(color: Colors.white, angle: 270),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 65,
-            right: screenWidth * 0.32,
-            child: GestureDetector(
-              onTap: () {
-                print('Right triangle pressed');
-              },
-              child: CustomPaint(
-                size: Size(50, 50),
-                painter: TrianglePainter(color: Colors.white, angle: 90),
-              ),
-            ),
-          ),
+
           Positioned(
             top: 50,
             right: 20,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildLabel('N: ${north} cm', fontSize: 18),
-                _buildLabel('E: ${east} cm', fontSize: 18),
-                _buildLabel('S: ${south} cm', fontSize: 18),
-                _buildLabel('W: ${west} cm', fontSize: 18),
-                SizedBox(height: 20),
-                _buildLabel('X: $x', fontSize: 18),
-                _buildLabel('Y: $y', fontSize: 18),
-                _buildLabel('Z: $z', fontSize: 18),
+                _buildLabel('N: ${mapper.north.toStringAsFixed(2)} cm'),
+                _buildLabel('E: ${mapper.east.toStringAsFixed(2)} cm'),
+                _buildLabel('S: ${mapper.south.toStringAsFixed(2)} cm'),
+                _buildLabel('W: ${mapper.west.toStringAsFixed(2)} cm'),
+                const SizedBox(height: 20),
+                _buildLabel('X: ${mapper.robotX.toStringAsFixed(2)}'),
+                _buildLabel('Y: ${mapper.robotY.toStringAsFixed(2)}'),
+                _buildLabel(
+                    'Orientation: ${mapper.orientation.toStringAsFixed(0)}°'),
               ],
             ),
           ),
+
           Positioned(
             bottom: 20,
             right: 20,
             child: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  isCameraPage = !isCameraPage;
-                  showMap = !showMap;
-                });
-                // if (!showMap && _cameraController != null) {
-                //   _cameraController!.dispose();
-                //   _cameraController =
-                //       CameraController(widget.camera, ResolutionPreset.medium);
-                //   _initializeControllerFuture = _cameraController!.initialize();
-                // }
-              },
-              child: Text(isCameraPage ? 'Show Map' : 'Show Camera'),
+              onPressed: () => setState(() => showMap = !showMap),
+              child: Text(showMap ? 'Show Camera' : 'Show Map'),
             ),
           ),
         ],
@@ -287,51 +172,207 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-  Widget _buildLabel(String text, {double fontSize = 14}) {
-    return Text(
-      text,
-      style: TextStyle(color: Colors.white, fontSize: fontSize),
+  Widget _buildMapWidget() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return CustomPaint(
+          size: Size(constraints.maxWidth, constraints.maxHeight),
+          painter: MapPainter(mapper),
+        );
+      },
     );
+  }
+
+  Widget _buildCameraPlaceholder() {
+    return const Center(
+      child: Text('CAMERA PLACEHOLDER',
+          style: TextStyle(color: Colors.white, fontSize: 28)),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Text(text,
+        style: const TextStyle(color: Colors.white, fontSize: 18));
   }
 }
 
-class TrianglePainter extends CustomPainter {
-  final Color color;
-  final double angle;
+class RobotMapper {
+  final Map<Point<double>, List<String>> obstacles = {};
+  final List<Point<double>> robotPath = [];
+  final List<Point<double>> allObstacles =
+      []; // New list to store all obstacles
 
-  TrianglePainter({required this.color, required this.angle});
+  double robotX = 0;
+  double robotY = 0;
+  double orientation = 0;
+
+  double north = 0;
+  double east = 0;
+  double south = 0;
+  double west = 0;
+
+  void updatePosition(double x, double y) {
+    robotX = x;
+    robotY = y;
+    robotPath.add(Point(x, y));
+  }
+
+  void processSensorData(Map<String, dynamic> data) {
+    north = data['n']?.toDouble() ?? north;
+    east = data['e']?.toDouble() ?? east;
+    south = data['s']?.toDouble() ?? south;
+    west = data['w']?.toDouble() ?? west;
+
+    obstacles.clear();
+
+    final rad = orientation * (pi / 180);
+    final cosVal = cos(rad);
+    final sinVal = sin(rad);
+
+    if (north > 0) {
+      final x = robotX + (-north * sinVal);
+      final y = robotY + (north * cosVal);
+      final point = Point(x, y);
+      obstacles[point] = ['north'];
+      allObstacles.add(point); // Add to history
+    }
+
+    if (east > 0) {
+      final x = robotX + (east * cosVal);
+      final y = robotY + (east * sinVal);
+      final point = Point(x, y);
+      obstacles[point] = ['east'];
+      allObstacles.add(point); // Add to history
+    }
+
+    if (south > 0) {
+      final x = robotX + (south * sinVal);
+      final y = robotY + (-south * cosVal);
+      final point = Point(x, y);
+      obstacles[point] = ['south'];
+      allObstacles.add(point); // Add to history
+    }
+
+    if (west > 0) {
+      final x = robotX + (-west * cosVal);
+      final y = robotY + (-west * sinVal);
+      final point = Point(x, y);
+      obstacles[point] = ['west'];
+      allObstacles.add(point); // Add to history
+    }
+  }
+
+  void moveRobot(double dx, double dy) {
+    robotX += dx;
+    robotY += dy;
+    robotPath.add(Point(robotX, robotY));
+  }
+}
+
+class MapPainter extends CustomPainter {
+  final RobotMapper mapper;
+
+  MapPainter(this.mapper);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()..color = color;
-    final Path path = Path();
+    final allPoints = [
+      ...mapper.allObstacles, // Changed from obstacles.keys to allObstacles
+      ...mapper.robotPath,
+      Point(mapper.robotX, mapper.robotY)
+    ];
 
-    final double width = size.width;
-    final double height = size.height;
-
-    path.moveTo(width / 2, 0);
-
-    if (angle == 90) {
-      path.lineTo(width, height);
-      path.lineTo(0, height);
-    } else if (angle == 270) {
-      path.lineTo(0, height);
-      path.lineTo(width, height);
+    if (allPoints.isEmpty) {
+      _drawWaiting(canvas, size);
+      return;
     }
 
-    path.close();
+    double minX = allPoints.map((p) => p.x).reduce(min);
+    double maxX = allPoints.map((p) => p.x).reduce(max);
+    double minY = allPoints.map((p) => p.y).reduce(min);
+    double maxY = allPoints.map((p) => p.y).reduce(max);
 
-    canvas.save();
-    canvas.translate(width / 2, height / 2);
-    canvas.rotate(angle * pi / 180);
-    canvas.translate(-width / 2, -height / 2);
+    double padding = max(maxX - minX, maxY - minY) * 0.2;
+    padding = max(padding, 5.0);
+    minX -= padding;
+    maxX += padding;
+    minY -= padding;
+    maxY += padding;
 
-    canvas.drawPath(path, paint);
-    canvas.restore();
+    final scaleX = size.width / (maxX - minX);
+    final scaleY = size.height / (maxY - minY);
+    final scale = min(scaleX, scaleY) * 0.9;
+
+    Offset toCanvas(Point<double> point) {
+      return Offset(
+        (point.x - minX) * scale,
+        size.height - (point.y - minY) * scale,
+      );
+    }
+
+    // Draw all obstacles (historical and current)
+    final obstaclePaint = Paint()..color = Colors.red.withOpacity(0.5);
+    for (final obstacle in mapper.allObstacles) {
+      canvas.drawCircle(toCanvas(obstacle), 5, obstaclePaint); // Smaller dots
+    }
+
+    // Draw current obstacles more prominently
+    final currentObstaclePaint = Paint()..color = Colors.red;
+    for (final obstacle in mapper.obstacles.keys) {
+      canvas.drawCircle(toCanvas(obstacle), 8, currentObstaclePaint);
+    }
+
+    if (mapper.robotPath.length > 1) {
+      final pathPaint = Paint()
+        ..color = Colors.blue.withOpacity(0.5)
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke;
+
+      final path = Path();
+      path.moveTo(toCanvas(mapper.robotPath.first).dx,
+          toCanvas(mapper.robotPath.first).dy);
+
+      for (final point in mapper.robotPath.skip(1)) {
+        path.lineTo(toCanvas(point).dx, toCanvas(point).dy);
+      }
+
+      canvas.drawPath(path, pathPaint);
+    }
+
+    final robotPos = toCanvas(Point(mapper.robotX, mapper.robotY));
+    final robotPaint = Paint()..color = Colors.green;
+    canvas.drawCircle(robotPos, 10, robotPaint);
+
+    final orientationRad = mapper.orientation * (pi / 180);
+    final orientationPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 2;
+
+    final endPos = Offset(
+      robotPos.dx + 20 * cos(orientationRad),
+      robotPos.dy - 20 * sin(orientationRad),
+    );
+    canvas.drawLine(robotPos, endPos, orientationPaint);
+  }
+
+  void _drawWaiting(Canvas canvas, Size size) {
+    final text = TextSpan(
+      text: 'Waiting for robot data...',
+      style: TextStyle(color: Colors.white, fontSize: 20),
+    );
+
+    final textPainter = TextPainter(
+      text: text,
+      textDirection: TextDirection.ltr,
+    );
+
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(size.width / 2 - textPainter.width / 2, size.height / 2),
+    );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return false;
-  }
+  bool shouldRepaint(MapPainter oldDelegate) => true;
 }
