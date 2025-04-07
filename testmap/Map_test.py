@@ -5,6 +5,7 @@ import json
 import time
 from collections import defaultdict
 import socket
+from matplotlib.animation import FuncAnimation
 
 class RobotMapper:
     def __init__(self):
@@ -16,9 +17,9 @@ class RobotMapper:
         self.robot_x = 0
         self.robot_y = 0
         self.orientation = 0
+        self.new_data = False
         
         # Visualization
-        plt.ion()
         self.fig, self.ax = plt.subplots(figsize=(10, 10))
         self.setup_plot()
         
@@ -31,7 +32,6 @@ class RobotMapper:
         self.path_plot, = self.ax.plot([], [], 'b-', alpha=0.5, label='Path')
         self.robot_plot = self.ax.scatter([], [], c='green', s=100, label='Robot')
         self.ax.legend()
-        plt.draw()
         
     def update_sensors(self, sensor_data):
         """Convert relative sensor distances to absolute world coordinates"""
@@ -52,7 +52,8 @@ class RobotMapper:
             
             self.obstacles[(world_x, world_y)].append(direction)
         
-        self.update_plot()
+        self.move_robot(5)  # Simulated movement
+        self.new_data = True
         
     def move_robot(self, distance):
         rad = math.radians(self.orientation)
@@ -60,7 +61,10 @@ class RobotMapper:
         self.robot_y += distance * math.cos(rad)
         self.robot_path.append((self.robot_x, self.robot_y))
         
-    def update_plot(self):
+    def update_plot(self, frame):
+        if not self.new_data:
+            return self.obstacles_scatter, self.path_plot, self.robot_plot
+        
         if self.obstacles:
             obs_x, obs_y = zip(*self.obstacles.keys()) if self.obstacles else ([], [])
             self.obstacles_scatter.set_offsets(list(zip(obs_x, obs_y)))
@@ -79,13 +83,14 @@ class RobotMapper:
             self.ax.set_xlim(min(all_x)-padding, max(all_x)+padding)
             self.ax.set_ylim(min(all_y)-padding, max(all_y)+padding)
         
-        self.fig.canvas.draw_idle()
-        self.fig.canvas.flush_events()
+        self.new_data = False
+        return self.obstacles_scatter, self.path_plot, self.robot_plot
 
-def on_connect(client, userdata, flags, rc):
+# Updated to handle both V1 and V2 callback APIs
+def on_connect(client, userdata, flags, rc, *args):
     if rc == 0:
         print("Connected to MQTT Broker!")
-        client.subscribe("sensors/raw", qos=1)
+        client.subscribe("sensors/recalculated", qos=1)
     else:
         print(f"Connection failed with code {rc}")
 
@@ -94,20 +99,21 @@ def on_message(client, userdata, msg):
         data = json.loads(msg.payload.decode())
         print(f"Received sensor data: {data}")
         mapper.update_sensors(data)
-        mapper.move_robot(5)  # Simulated movement
     except Exception as e:
         print(f"Error processing message: {e}")
 
 # Initialize mapper
 mapper = RobotMapper()
-client = mqtt.Client()
+
+# Use the newer MQTT client API version
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
 # Set callback functions
 client.on_connect = on_connect
 client.on_message = on_message
 
 # Connection parameters - MODIFY THESE!
-BROKER_ADDRESS = "192.168.11.70"  # Fixed IP address (no spaces)
+BROKER_ADDRESS = "192.168.4.1"  # Fixed IP address (no spaces)
 BROKER_PORT = 1883
 BROKER_TIMEOUT = 60
 
@@ -118,8 +124,16 @@ try:
     client.connect(BROKER_ADDRESS, BROKER_PORT, BROKER_TIMEOUT)
     client.loop_start()
     
+    # Use FuncAnimation with explicit save_count to avoid warning
+    ani = FuncAnimation(
+        mapper.fig, 
+        mapper.update_plot, 
+        interval=100,
+        cache_frame_data=False,  # Disable caching to avoid warning
+        save_count=100  # Limit the number of frames stored
+    )
     print("Running visualization. Close window to exit.")
-    plt.show(block=True)
+    plt.show()
     
 except KeyboardInterrupt:
     print("\nShutting down gracefully...")
@@ -130,12 +144,10 @@ except socket.gaierror:
     print("- Broker is running and accessible")
 except ConnectionRefusedError:
     print("\nERROR: Connection refused. Please check:")
-    print("- Broker is running on port {BROKER_PORT}")
+    print(f"- Broker is running on port {BROKER_PORT}")
     print("- No firewall blocking the connection")
     print("- Authentication requirements (if any)")
 except Exception as e:
     print(f"\nERROR: {str(e)}")
 finally:
     client.loop_stop()
-    client.disconnect()
-    plt.ioff()
