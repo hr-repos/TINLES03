@@ -1,11 +1,21 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_joystick/flutter_joystick.dart';
-import 'package:mqtt_client/mqtt_browser_client.dart'; // For Web
+import 'package:mqtt_client/mqtt_browser_client.dart';
 import 'package:mqtt_client/mqtt_client.dart';
-import 'package:mqtt_client/mqtt_server_client.dart'; // For mobile
-import 'package:flutter/foundation.dart'; // To check for platform
+import 'package:mqtt_client/mqtt_server_client.dart';
+import 'package:flutter/foundation.dart';
+
+// Command constants
+const _commandForward = 'w';
+const _commandBackward = 's';
+const _commandLeft = 'a';
+const _commandRight = 'd';
+const _commandRotateLeft = 'q';
+const _commandRotateRight = 'e';
+const _commandStop = ' ';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,11 +31,12 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool showMap = true;
-  double joystickX = 0.0;
-  double joystickY = 0.0;
-
-  late MqttClient client; // Changed to the base class
+  late MqttClient client;
   late RobotMapper mapper;
+
+  String _lastCommand = '';
+  Timer? _commandTimer;
+  bool _joystickActive = false;
 
   @override
   void initState() {
@@ -36,8 +47,8 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _connectMQTT() async {
     const clientId = 'flutter_client';
-    final wsUrl = 'ws://192.168.11.70';
-    final tcpUrl = '192.168.11.70';
+    final wsUrl = 'ws://192.168.4.1';
+    final tcpUrl = '192.168.4.1';
 
     if (kIsWeb) {
       client = MqttBrowserClient.withPort(wsUrl, clientId, 9001);
@@ -93,6 +104,71 @@ class _MyAppState extends State<MyApp> {
     print('Disconnected from MQTT broker');
   }
 
+  void _sendMovementCommand(String command) {
+    if (command == _lastCommand) return;
+
+    _lastCommand = command;
+    final builder = MqttClientPayloadBuilder();
+    builder.addString(command);
+    client.publishMessage(
+        'robot/command', MqttQos.atLeastOnce, builder.payload!);
+
+    print('Sent command: $command');
+  }
+
+  void _handleJoystick(StickDragDetails details) {
+    // Virtual movement
+    mapper.moveRobot(details.x * 5, details.y * 5);
+    setState(() {});
+
+    // Determine real command
+    String newCommand = _commandStop;
+    final deadZone = 0.2;
+
+    if (details.x.abs() > deadZone || details.y.abs() > deadZone) {
+      _joystickActive = true;
+
+      // Forward/backward takes priority
+      if (details.y < -deadZone) {
+        newCommand = _commandForward;
+      } else if (details.y > deadZone) {
+        newCommand = _commandBackward;
+      }
+      // Left/right if not moving forward/backward
+      else if (details.x < -deadZone) {
+        newCommand = _commandLeft;
+      } else if (details.x > deadZone) {
+        newCommand = _commandRight;
+      }
+    } else {
+      if (_joystickActive) {
+        _joystickActive = false;
+        newCommand = _commandStop;
+      }
+    }
+
+    // Send command immediately when changed
+    if (newCommand != _lastCommand) {
+      _sendMovementCommand(newCommand);
+    }
+
+    // Setup periodic sending while joystick is active
+    _commandTimer?.cancel();
+    if (_joystickActive) {
+      _commandTimer =
+          Timer.periodic(const Duration(milliseconds: 500), (timer) {
+        _sendMovementCommand(newCommand);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _commandTimer?.cancel();
+    client.disconnect();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -133,10 +209,7 @@ class _MyAppState extends State<MyApp> {
             bottom: 20,
             left: screenSize.width * 0.45,
             child: Joystick(
-              listener: (details) {
-                mapper.moveRobot(details.x * 5, details.y * 5);
-                setState(() {});
-              },
+              listener: _handleJoystick,
             ),
           ),
 
@@ -155,6 +228,8 @@ class _MyAppState extends State<MyApp> {
                 _buildLabel('Y: ${mapper.robotY.toStringAsFixed(2)}'),
                 _buildLabel(
                     'Orientation: ${mapper.orientation.toStringAsFixed(0)}°'),
+                const SizedBox(height: 20),
+                _buildLabel('Last Command: $_lastCommand'),
               ],
             ),
           ),
@@ -199,8 +274,7 @@ class _MyAppState extends State<MyApp> {
 class RobotMapper {
   final Map<Point<double>, List<String>> obstacles = {};
   final List<Point<double>> robotPath = [];
-  final List<Point<double>> allObstacles =
-      []; // New list to store all obstacles
+  final List<Point<double>> allObstacles = [];
 
   double robotX = 0;
   double robotY = 0;
@@ -234,7 +308,7 @@ class RobotMapper {
       final y = robotY + (north * cosVal);
       final point = Point(x, y);
       obstacles[point] = ['north'];
-      allObstacles.add(point); // Add to history
+      allObstacles.add(point);
     }
 
     if (east > 0) {
@@ -242,7 +316,7 @@ class RobotMapper {
       final y = robotY + (east * sinVal);
       final point = Point(x, y);
       obstacles[point] = ['east'];
-      allObstacles.add(point); // Add to history
+      allObstacles.add(point);
     }
 
     if (south > 0) {
@@ -250,7 +324,7 @@ class RobotMapper {
       final y = robotY + (-south * cosVal);
       final point = Point(x, y);
       obstacles[point] = ['south'];
-      allObstacles.add(point); // Add to history
+      allObstacles.add(point);
     }
 
     if (west > 0) {
@@ -258,7 +332,7 @@ class RobotMapper {
       final y = robotY + (-west * sinVal);
       final point = Point(x, y);
       obstacles[point] = ['west'];
-      allObstacles.add(point); // Add to history
+      allObstacles.add(point);
     }
   }
 
@@ -277,7 +351,7 @@ class MapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final allPoints = [
-      ...mapper.allObstacles, // Changed from obstacles.keys to allObstacles
+      ...mapper.allObstacles,
       ...mapper.robotPath,
       Point(mapper.robotX, mapper.robotY)
     ];
@@ -310,10 +384,10 @@ class MapPainter extends CustomPainter {
       );
     }
 
-    // Draw all obstacles (historical and current)
+    // Draw all historical obstacles
     final obstaclePaint = Paint()..color = Colors.red.withOpacity(0.5);
     for (final obstacle in mapper.allObstacles) {
-      canvas.drawCircle(toCanvas(obstacle), 5, obstaclePaint); // Smaller dots
+      canvas.drawCircle(toCanvas(obstacle), 5, obstaclePaint);
     }
 
     // Draw current obstacles more prominently
@@ -322,6 +396,7 @@ class MapPainter extends CustomPainter {
       canvas.drawCircle(toCanvas(obstacle), 8, currentObstaclePaint);
     }
 
+    // Draw robot path
     if (mapper.robotPath.length > 1) {
       final pathPaint = Paint()
         ..color = Colors.blue.withOpacity(0.5)
@@ -339,10 +414,12 @@ class MapPainter extends CustomPainter {
       canvas.drawPath(path, pathPaint);
     }
 
+    // Draw robot
     final robotPos = toCanvas(Point(mapper.robotX, mapper.robotY));
     final robotPaint = Paint()..color = Colors.green;
     canvas.drawCircle(robotPos, 10, robotPaint);
 
+    // Draw orientation
     final orientationRad = mapper.orientation * (pi / 180);
     final orientationPaint = Paint()
       ..color = Colors.white

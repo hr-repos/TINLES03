@@ -11,3 +11,4 @@ secrets.h
 .idea
 .flutter-plugins
 .flutter-plugins-dependencies
+/android/local.properties
