@@ -109,7 +109,7 @@ void publishData(void *pvParameters) {
         // Publish recalculated data (simplified format)
         snprintf(recalculatedData, sizeof(recalculatedData),
             "{\"y\":%.2f,\"n\":%.2f,\"e\":%.2f,\"s\":%.2f,\"w\":%.2f}",
-            compass.getHeadingDegrees(),
+            directionCalculator.currentYaw,
             directionCalculator.recalculatedNorth,
             directionCalculator.recalculatedEast,
             directionCalculator.recalculatedSouth,

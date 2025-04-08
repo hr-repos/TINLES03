@@ -1,23 +1,40 @@
-#include <Arduino.h>
 #include "DirectionCalculator.h"
+#include <Arduino.h>
 
-DirectionCalculator::DirectionCalculator(UltrasonicSensor &north, UltrasonicSensor &east, 
-                                       UltrasonicSensor &south, UltrasonicSensor &west,
-                                       GY271_QMC5883L &compass)
-    : northSensor(north), eastSensor(east), southSensor(south), westSensor(west),
-      compass(compass) {}
+DirectionCalculator::DirectionCalculator(UltrasonicSensor& north, UltrasonicSensor& east, UltrasonicSensor& south,
+    UltrasonicSensor& west, GY271_QMC5883L& compass)
+    : northSensor(north)
+    , eastSensor(east)
+    , southSensor(south)
+    , westSensor(west)
+    , compass(compass)
+{
+}
 
-void DirectionCalculator::update() {
+void DirectionCalculator::update()
+{
     rawNorth = northSensor.getDistance();
     rawEast = eastSensor.getDistance();
     rawSouth = southSensor.getDistance();
     rawWest = westSensor.getDistance();
 
-    currentYaw = compass.getHeadingDegrees();  // Get current yaw from compass
+    // Get current yaw from compass
+    float currentRawYaw = compass.getHeadingDegrees();
+
+    // Store the first yaw reading as initial reference
+    if (!hasInitialYaw) {
+        initialYaw = currentRawYaw;
+        hasInitialYaw = true;
+    }
+
+    // Calculate normalized yaw (0-360)
+    currentYaw = fmod(currentRawYaw - initialYaw + 360.0f, 360.0f);
+
     recalculateData(currentYaw);
 }
 
-void DirectionCalculator::recalculateData(float yaw) {
+void DirectionCalculator::recalculateData(float yaw)
+{
     float radians = yaw * PI / 180.0;
 
     recalculatedNorth = fabs(rawNorth * cos(radians) - rawWest * sin(radians)) + 0.01;
@@ -45,15 +62,16 @@ void DirectionCalculator::recalculateData(float yaw) {
     printData();
 }
 
-void DirectionCalculator::printData() {
+void DirectionCalculator::printData()
+{
     Serial.println("Raw Data:");
-    Serial.printf("North: %.2f cm, East: %.2f cm, South: %.2f cm, West: %.2f cm\n",
-                  rawNorth, rawEast, rawSouth, rawWest);
+    Serial.printf(
+        "North: %.2f cm, East: %.2f cm, South: %.2f cm, West: %.2f cm\n", rawNorth, rawEast, rawSouth, rawWest);
 
     Serial.println("Recalculated Data:");
-    Serial.printf("Yaw: %.2f degrees\n", currentYaw); // Print the actual yaw angle
-    Serial.printf("North: %.2f cm, East: %.2f cm, South: %.2f cm, West: %.2f cm\n",
-                  recalculatedNorth, recalculatedEast, recalculatedSouth, recalculatedWest);
+    Serial.printf("Raw Yaw: %.2f degrees, Normalized Yaw: %.2f degrees\n", compass.getHeadingDegrees(), currentYaw);
+    Serial.printf("North: %.2f cm, East: %.2f cm, South: %.2f cm, West: %.2f cm\n", recalculatedNorth, recalculatedEast,
+        recalculatedSouth, recalculatedWest);
 
     Serial.println("-----------------------------");
 }
