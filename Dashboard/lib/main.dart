@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_joystick/flutter_joystick.dart';
@@ -7,6 +8,7 @@ import 'package:mqtt_client/mqtt_browser_client.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 // Command constants
 const _commandForward = 'w';
@@ -33,10 +35,15 @@ class _MyAppState extends State<MyApp> {
   bool showMap = true;
   late MqttClient client;
   late RobotMapper mapper;
-
-  String _lastCommand = '';
+  InAppWebViewController? _webController;
+  bool _isLoading = true;
+  bool _hasError = false;
+  bool _isRotatingLeft = false;
+  bool _isRotatingRight = false;
+  Timer? _rotationTimer;
   Timer? _commandTimer;
   bool _joystickActive = false;
+  String _lastCommand = '';
 
   @override
   void initState() {
@@ -117,25 +124,20 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _handleJoystick(StickDragDetails details) {
-    // Virtual movement
     mapper.moveRobot(details.x * 5, details.y * 5);
     setState(() {});
 
-    // Determine real command
     String newCommand = _commandStop;
     final deadZone = 0.2;
 
     if (details.x.abs() > deadZone || details.y.abs() > deadZone) {
       _joystickActive = true;
 
-      // Forward/backward takes priority
       if (details.y < -deadZone) {
         newCommand = _commandForward;
       } else if (details.y > deadZone) {
         newCommand = _commandBackward;
-      }
-      // Left/right if not moving forward/backward
-      else if (details.x < -deadZone) {
+      } else if (details.x < -deadZone) {
         newCommand = _commandLeft;
       } else if (details.x > deadZone) {
         newCommand = _commandRight;
@@ -147,12 +149,10 @@ class _MyAppState extends State<MyApp> {
       }
     }
 
-    // Send command immediately when changed
     if (newCommand != _lastCommand) {
       _sendMovementCommand(newCommand);
     }
 
-    // Setup periodic sending while joystick is active
     _commandTimer?.cancel();
     if (_joystickActive) {
       _commandTimer =
@@ -162,9 +162,65 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  void _startRotation(String command) {
+    setState(() {
+      if (command == _commandRotateLeft) {
+        _isRotatingLeft = true;
+      } else {
+        _isRotatingRight = true;
+      }
+    });
+
+    _sendMovementCommand(command);
+
+    _rotationTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) {
+      _sendMovementCommand(command);
+    });
+  }
+
+  void _stopRotation() {
+    _rotationTimer?.cancel();
+    setState(() {
+      _isRotatingLeft = false;
+      _isRotatingRight = false;
+    });
+    _sendMovementCommand(_commandStop);
+  }
+
+  void _tryAlternativeUrls() async {
+    final alternativeUrls = [
+      'http://192.168.4.50',
+      'http://192.168.4.50:81/stream',
+      'http://192.168.4.50/cam.mjpeg',
+      'http://192.168.4.50:8080/video',
+    ];
+
+    for (final url in alternativeUrls) {
+      try {
+        final request = await HttpClient().getUrl(Uri.parse(url));
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          _webController?.loadUrl(urlRequest: URLRequest(url: Uri.parse(url)));
+          return;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+  }
+
+  void _retryCameraConnection() {
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
+    _webController?.reload();
+  }
+
   @override
   void dispose() {
     _commandTimer?.cancel();
+    _rotationTimer?.cancel();
     client.disconnect();
     super.dispose();
   }
@@ -190,7 +246,7 @@ class _MyAppState extends State<MyApp> {
       height: screenSize.height,
       child: Stack(
         children: [
-          // Map Container
+          // Map/Camera Container
           Container(
             width: screenSize.width * 0.85,
             height: screenSize.height * 0.7,
@@ -202,14 +258,43 @@ class _MyAppState extends State<MyApp> {
                 right: BorderSide(color: Colors.white),
               ),
             ),
-            child: showMap ? _buildMapWidget() : _buildCameraPlaceholder(),
+            child: showMap ? _buildMapWidget() : _buildCameraWidget(),
           ),
 
+          // Joystick and Rotation Buttons
           Positioned(
             bottom: 20,
-            left: screenSize.width * 0.45,
-            child: Joystick(
-              listener: _handleJoystick,
+            left: screenSize.width * 0.35,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Rotate Left Button
+                _buildRotationButton(
+                  icon: Icons.rotate_left,
+                  isActive: _isRotatingLeft,
+                  onTapDown: () => _startRotation(_commandRotateLeft),
+                  onTapUp: () => _stopRotation(),
+                ),
+
+                const SizedBox(width: 20),
+
+                // Joystick
+                Joystick(
+                  listener: _handleJoystick,
+                  // stickSize: 60,
+                  // baseSize: 100,
+                ),
+
+                const SizedBox(width: 20),
+
+                // Rotate Right Button
+                _buildRotationButton(
+                  icon: Icons.rotate_right,
+                  isActive: _isRotatingRight,
+                  onTapDown: () => _startRotation(_commandRotateRight),
+                  onTapUp: () => _stopRotation(),
+                ),
+              ],
             ),
           ),
 
@@ -247,6 +332,83 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  Widget _buildRotationButton({
+    required IconData icon,
+    required bool isActive,
+    required VoidCallback onTapDown,
+    required VoidCallback onTapUp,
+  }) {
+    return GestureDetector(
+      onTapDown: (_) => onTapDown(),
+      onTapUp: (_) => onTapUp(),
+      onTapCancel: onTapUp,
+      child: Container(
+        width: 60,
+        height: 60,
+        decoration: BoxDecoration(
+          color: isActive ? Colors.blue : Colors.blue.withOpacity(0.5),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2),
+        ),
+        child: Icon(icon, color: Colors.white, size: 30),
+      ),
+    );
+  }
+
+  Widget _buildCameraWidget() {
+    return Stack(
+      children: [
+        InAppWebView(
+          initialUrlRequest: URLRequest(url: Uri.parse('http://192.168.4.50')),
+          initialOptions: InAppWebViewGroupOptions(
+            crossPlatform: InAppWebViewOptions(
+              javaScriptEnabled: true,
+              mediaPlaybackRequiresUserGesture: false,
+              transparentBackground: true,
+            ),
+          ),
+          onWebViewCreated: (controller) {
+            _webController = controller;
+          },
+          onLoadStart: (controller, url) {
+            setState(() {
+              _isLoading = true;
+              _hasError = false;
+            });
+          },
+          onLoadStop: (controller, url) {
+            setState(() => _isLoading = false);
+          },
+          onLoadError: (controller, url, code, message) {
+            setState(() {
+              _isLoading = false;
+              _hasError = true;
+            });
+            _tryAlternativeUrls();
+          },
+        ),
+        if (_isLoading) const Center(child: CircularProgressIndicator()),
+        if (_hasError)
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.videocam_off, size: 50, color: Colors.red),
+                const SizedBox(height: 16),
+                const Text('Camera feed unavailable',
+                    style: TextStyle(color: Colors.white, fontSize: 18)),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _retryCameraConnection,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildMapWidget() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -255,13 +417,6 @@ class _MyAppState extends State<MyApp> {
           painter: MapPainter(mapper),
         );
       },
-    );
-  }
-
-  Widget _buildCameraPlaceholder() {
-    return const Center(
-      child: Text('CAMERA PLACEHOLDER',
-          style: TextStyle(color: Colors.white, fontSize: 28)),
     );
   }
 
