@@ -11,36 +11,25 @@ DirectionCalculator::DirectionCalculator(UltrasonicSensor& north, UltrasonicSens
 {
 }
 
-float DirectionCalculator::applyFilter(float* history, float newValue) {
-    history[historyIndex] = newValue;
-    
-    float sum = 0;
-    for (int i = 0; i < FILTER_SIZE; i++) {
-        sum += history[i];
-    }
-    
-    historyIndex = (historyIndex + 1) % FILTER_SIZE;
-    return sum / FILTER_SIZE;
-}
-
-void DirectionCalculator::update() {
-    // Get filtered raw distances
-    rawNorth = applyFilter(rawNorthHistory, northSensor.getDistance());
-    rawEast = applyFilter(rawEastHistory, eastSensor.getDistance());
-    rawSouth = applyFilter(rawSouthHistory, southSensor.getDistance());
-    rawWest = applyFilter(rawWestHistory, westSensor.getDistance());
+void DirectionCalculator::update()
+{
+    rawNorth = northSensor.getDistance();
+    rawEast = eastSensor.getDistance();
+    rawSouth = southSensor.getDistance();
+    rawWest = westSensor.getDistance();
 
     // Get current yaw from compass
     float currentRawYaw = compass.getHeadingDegrees();
-    currentRawYaw = applyFilter(yawHistory, currentRawYaw);  // Filter yaw readings
 
-    // Rest of the update method remains the same...
+    // Store the first yaw reading as initial reference
     if (!hasInitialYaw) {
         initialYaw = currentRawYaw;
         hasInitialYaw = true;
     }
 
+    // Calculate normalized yaw (0-360)
     currentYaw = fmod(currentRawYaw - initialYaw + 360.0f, 360.0f);
+
     recalculateData(currentYaw);
 }
 
