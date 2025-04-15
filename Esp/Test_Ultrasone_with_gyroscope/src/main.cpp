@@ -8,6 +8,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
+#include "uwb.h"
 
 // Define pins for ultrasonic sensors
 #define TRIGGER_NORTH 18
@@ -28,6 +29,7 @@ UltrasonicSensor westSensor(TRIGGER_WEST, ECHO_WEST);
 // Create compass object
 GY271_QMC5883L compass;
 LcdModule Lcd;
+Uwb uwb;
 
 // Create direction calculator object
 DirectionCalculator directionCalculator(northSensor, eastSensor, southSensor, westSensor, compass);
@@ -37,9 +39,13 @@ MqttClient mqttClient(ssid, password, mqttServer, mqttPort, mqttUser, mqttPasswo
 // Queue for MQTT messages (if needed)
 QueueHandle_t mqttQueue = NULL;
 
+double anchor1_dis;
+double anchor2_dis;
+
 // Function prototypes
 void readAndProcessData(void* pvParameters);
 void publishData(void* pvParameters);
+void read_uwb_distance(void* pvParameters);
 void mqttLoopTask(void* pvParameters);
 void connectToMqtt();
 
@@ -47,8 +53,9 @@ void setup()
 {
     Serial.begin(115200);
     while (!Serial)
-        ;
-
+    ;
+    
+    uwb.initialize();
     if (!compass.begin()) {
         Serial.println("Failed to initialize compass!");
         while (1)
@@ -66,10 +73,12 @@ void setup()
     mqttClient.subscribeTopic("sensors/recalculated");
     mqttClient.subscribeTopic("robot/status");
 
+    
     // Create FreeRTOS tasks
     xTaskCreate(readAndProcessData, "ReadAndProcessData", 3072, NULL, 2, NULL);
     xTaskCreate(publishData, "PublishData", 3072, NULL, 1, NULL);
     xTaskCreate(mqttLoopTask, "MqttLoopTask", 4096, NULL, 1, NULL);
+    xTaskCreate(read_uwb_distance, "ReadUwb", 4096, NULL, 3, NULL);
 }
 
 void loop()
@@ -101,11 +110,28 @@ void readAndProcessData(void* pvParameters)
     }
 }
 
+// Task to read and process sensor data
+void read_uwb_distance(void* pvParameters)
+{
+    while (1) {
+        double distance1 = uwb.getDistance(0x89); // Get distance from anchor 1
+        double distance2 = uwb.getDistance(0x88); // Get distance from anchor 2
+        if (distance1 >0.05){
+            anchor1_dis = distance1;
+        }
+        if (distance2 >0.05){
+            anchor2_dis = distance2;
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000)); // 10Hz update rate
+    }
+}
+
 // Task to publish sensor data
 void publishData(void* pvParameters)
 {
     // Pre-allocate buffers to avoid stack fragmentation
     static char rawData[128]; // Reduced from 256
+    static char uwbData[128]; // Reduced from 256
     static char recalculatedData[128]; // Reduced from 256
 
     while (1) {
@@ -122,6 +148,10 @@ void publishData(void* pvParameters)
 
         );
         mqttClient.publishMessage("sensors/recalculated", recalculatedData);
+        // Publish UWB data (simplified format)
+        snprintf(uwbData, sizeof(uwbData), "{\"a\":%.2f,\"b\":%.2f}",
+        anchor1_dis, anchor2_dis);
+        mqttClient.publishMessage("sensors/uwb", uwbData);
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
