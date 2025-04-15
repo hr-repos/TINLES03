@@ -14,15 +14,15 @@ void Uwb::initialize(){
   while (!dwt_checkidlerc()) // Need to make sure DW IC is in IDLE_RC before proceeding
   {
     UART_puts("IDLE FAILED\r\n");
-    while (1)
-      ;
+    // while (1)
+    //   ;
   }
 
   if (dwt_initialise(DWT_DW_INIT) == DWT_ERROR)
   {
     UART_puts("INIT FAILED\r\n");
-    while (1)
-      ;
+    // while (1)
+    //   ;
   }
 
   // Enabling LEDs here for debug so that for each TX the D1 LED will flash on DW3000 red eval-shield boards.
