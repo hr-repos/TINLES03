@@ -37,6 +37,8 @@ MqttClient mqttClient(ssid, password, mqttServer, mqttPort, mqttUser, mqttPasswo
 // Queue for MQTT messages (if needed)
 QueueHandle_t mqttQueue = NULL;
 
+bool systemActive = true;
+
 // Function prototypes
 void readAndProcessData(void* pvParameters);
 void publishData(void* pvParameters);
@@ -54,7 +56,7 @@ void setup()
         while (1)
             ;
     }
-    // Set calibration values (you should calibrate your own)
+    // Set calibration values
     compass.setCalibration(-1379.0, 1683.0, -1694.0, 1195.0);
     Lcd.initialize();
 
@@ -64,6 +66,7 @@ void setup()
     mqttClient.begin();
     mqttClient.subscribeTopic("sensors/raw");
     mqttClient.subscribeTopic("sensors/recalculated");
+    mqttClient.subscribeTopic("robot/status");
 
     // Create FreeRTOS tasks
     xTaskCreate(readAndProcessData, "ReadAndProcessData", 3072, NULL, 2, NULL);
@@ -95,7 +98,9 @@ void mqttLoopTask(void* pvParameters)
 void readAndProcessData(void* pvParameters)
 {
     while (1) {
-        directionCalculator.update();
+        if (systemActive) {
+            directionCalculator.update();
+        }
         vTaskDelay(pdMS_TO_TICKS(100)); // 10Hz update rate
     }
 }
