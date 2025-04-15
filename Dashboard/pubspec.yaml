@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   mqtt_client: ^9.6.3
-  flutter_joystick: 0.2.1
+  flutter_joystick: ^0.2.1
   collection: ^1.17.0
   intl: ^0.18.1
   flutter_inappwebview: ^5.7.2+3
