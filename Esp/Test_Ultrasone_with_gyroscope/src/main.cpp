@@ -37,8 +37,6 @@ MqttClient mqttClient(ssid, password, mqttServer, mqttPort, mqttUser, mqttPasswo
 // Queue for MQTT messages (if needed)
 QueueHandle_t mqttQueue = NULL;
 
-bool systemActive = true;
-
 // Function prototypes
 void readAndProcessData(void* pvParameters);
 void publishData(void* pvParameters);
@@ -98,9 +96,7 @@ void mqttLoopTask(void* pvParameters)
 void readAndProcessData(void* pvParameters)
 {
     while (1) {
-        if (systemActive) {
             directionCalculator.update();
-        }
         vTaskDelay(pdMS_TO_TICKS(100)); // 10Hz update rate
     }
 }
