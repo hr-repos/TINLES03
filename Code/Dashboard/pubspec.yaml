@@ -1,0 +1,24 @@
+name: robot_mapper
+description: A Flutter application for robot mapping and visualization
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  mqtt_client: ^9.6.3
+  flutter_joystick: ^0.2.1
+  collection: ^1.17.0
+  intl: ^0.18.1
+  flutter_inappwebview: ^5.7.2+3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
